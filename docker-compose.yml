@@ -1,0 +1,196 @@
+# This is the Nextcloud configuration file that creates local volumes for all containers.
+# Environment variables are loaded from .env file by default
+# See README.md for detailed documentation
+#
+# This setup includes:
+# - Nextcloud web application
+# - MariaDB database
+# - Redis cache
+# - Cloudflared tunnel (optional)
+
+version: "3.8"
+
+services:
+  nextcloud:
+    container_name: "${CONTAINER_NAME_PREFIX}_nextcloud"
+    image: "lscr.io/linuxserver/nextcloud:latest"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - "nextcloud_config_volume:/config"
+      - "nextcloud_data_volume:/data"
+      - "media_volume:${CONTAINER_MEDIA_PATH}"
+    networks:
+      - nextcloud_apps
+      - nextcloud_database_network
+      - container_internet
+    depends_on:
+      - nextcloud_db
+      - nextcloud_redis
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
+      - "traefik.http.routers.nextcloud.tls=true"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=443"
+      - "traefik.http.services.nextcloud.loadbalancer.server.scheme=https"
+      # Nextcloud specific headers
+      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Port=443"
+      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=nextcloud.${DOMAIN_NAME}"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers"
+
+  nextcloud_db:
+    container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
+    image: "mariadb:10.11"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${NEXTCLOUD_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${NEXTCLOUD_DB_NAME}
+      - MYSQL_USER=${NEXTCLOUD_DB_USER}
+      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - TZ=${TZ}
+    volumes:
+      - "nextcloud_db_volume:/var/lib/mysql"
+    networks:
+      - nextcloud_database_network
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=256M --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
+    logging:
+      driver: json-file
+      options:
+        max-file: '5'
+        max-size: 10m
+
+  nextcloud_redis:
+    container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_redis"
+    image: "redis:7-alpine"
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - "nextcloud_redis_volume:/data"
+    networks:
+      - nextcloud_database_network
+    restart: unless-stopped
+    command: redis-server --requirepass ${NEXTCLOUD_REDIS_PASSWORD}
+    logging:
+      driver: json-file
+      options:
+        max-file: '5'
+        max-size: 10m
+
+  # Nextcloud cron job service
+  nextcloud_cron:
+    container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_cron"
+    image: "lscr.io/linuxserver/nextcloud:latest"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - "nextcloud_config_volume:/config"
+      - "nextcloud_data_volume:/data"
+      - "media_volume:${CONTAINER_MEDIA_PATH}"
+    networks:
+      - nextcloud_apps
+      - nextcloud_database_network
+    depends_on:
+      - nextcloud_db
+      - nextcloud_redis
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command: |
+      -c 'sh -s <<EOF
+      trap "break;exit" SIGHUP SIGINT SIGTERM
+      while [ -f /config/www/nextcloud/occ ]; do
+        php /config/www/nextcloud/occ system:cron
+        sleep 300
+      done
+      EOF'
+
+  cloudflared:
+    container_name: "${CONTAINER_NAME_PREFIX}_cloudflared"
+    image: "cloudflare/cloudflared:latest"
+    entrypoint: ["cloudflared", "--no-autoupdate"]
+    command: ["tunnel", "run"]
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARED_TOKEN}
+    networks:
+      - nextcloud_apps      # Access to app services
+      - container_internet  # Internet access for tunnel
+    restart: always
+    deploy:
+      replicas: ${ENABLE_CLOUDFLARED:-0}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "status"]
+      interval: 120s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+
+networks:
+  # Internal isolated network for inter-service communication
+  nextcloud_apps:
+    name: "${NEXTCLOUD_NETWORK}"
+    internal: true
+    driver: bridge
+
+  # Database network for database communication
+  nextcloud_database_network:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_db_network"
+    internal: true
+    driver: bridge
+
+  # External network for internet access
+  container_internet:
+    external: true
+    name: "containers_internet"
+
+volumes:
+  # Media volume - shared with other services if needed
+  media_volume:
+    name: "${CONTAINER_NAME_PREFIX}_media"
+    driver: local
+    driver_opts:
+      type: ${MEDIA_VOLUME_TYPE:-}
+      o: ${MEDIA_VOLUME_OPTIONS:-}
+      device: ${MEDIA_BASE:-}
+
+  # Nextcloud configuration volume
+  nextcloud_config_volume:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_config"
+    driver: local
+    driver_opts:
+      type: ${CONFIG_VOLUME_TYPE:-}
+      o: ${CONFIG_VOLUME_OPTIONS:-}
+      device: ${CONFIG_BASE}/nextcloud
+
+  # Nextcloud data volume (user files)
+  nextcloud_data_volume:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_data"
+    driver: local
+    driver_opts:
+      type: ${DATA_VOLUME_TYPE:-}
+      o: ${DATA_VOLUME_OPTIONS:-}
+      device: ${DATA_BASE}/nextcloud
+
+  # MariaDB database volume
+  nextcloud_db_volume:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
+    driver: local
+    driver_opts:
+      type: ${CONFIG_VOLUME_TYPE:-}
+      o: ${CONFIG_VOLUME_OPTIONS:-}
+      device: ${CONFIG_BASE}/nextcloud-db
+
+  # Redis cache volume
+  nextcloud_redis_volume:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_redis"
+    driver: local
+    driver_opts:
+      type: ${CONFIG_VOLUME_TYPE:-}
+      o: ${CONFIG_VOLUME_OPTIONS:-}
+      device: ${CONFIG_BASE}/nextcloud-redis 
