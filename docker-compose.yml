@@ -150,15 +150,6 @@ networks:
     name: "containers_internet"
 
 volumes:
-  # Media volume - shared with other services if needed
-  media_volume:
-    name: "${CONTAINER_NAME_PREFIX}_media"
-    driver: local
-    driver_opts:
-      type: ${MEDIA_VOLUME_TYPE:-}
-      o: ${MEDIA_VOLUME_OPTIONS:-}
-      device: ${MEDIA_BASE:-}
-
   # Nextcloud configuration volume
   nextcloud_config_volume:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_config"
@@ -166,7 +157,7 @@ volumes:
     driver_opts:
       type: ${CONFIG_VOLUME_TYPE:-}
       o: ${CONFIG_VOLUME_OPTIONS:-}
-      device: ${CONFIG_BASE}/nextcloud
+      device: ${CONFIG_BASE}/nextcloud/config
 
   # Nextcloud data volume (user files)
   nextcloud_data_volume:
@@ -175,7 +166,7 @@ volumes:
     driver_opts:
       type: ${DATA_VOLUME_TYPE:-}
       o: ${DATA_VOLUME_OPTIONS:-}
-      device: ${DATA_BASE}/nextcloud
+      device: ${DATA_BASE}/nextcloud/user_data
 
   # MariaDB database volume
   nextcloud_db_volume:
@@ -184,7 +175,7 @@ volumes:
     driver_opts:
       type: ${CONFIG_VOLUME_TYPE:-}
       o: ${CONFIG_VOLUME_OPTIONS:-}
-      device: ${CONFIG_BASE}/nextcloud-db
+      device: ${CONFIG_BASE}/nextcloud/db
 
   # Redis cache volume
   nextcloud_redis_volume:
@@ -193,4 +184,4 @@ volumes:
     driver_opts:
       type: ${CONFIG_VOLUME_TYPE:-}
       o: ${CONFIG_VOLUME_OPTIONS:-}
-      device: ${CONFIG_BASE}/nextcloud-redis 
+      device: ${CONFIG_BASE}/nextcloud/redis
