@@ -135,6 +135,13 @@ Verify Redis is working:
 docker-compose exec nextcloud_redis redis-cli -a your_redis_password ping
 ```
 
+### HTTPS Warning Behind Reverse Proxy
+If you see "Accessing site insecurely via HTTP" warning when using HTTPS through Traefik:
+- The configuration includes automatic HTTPS detection for Traefik
+- `OVERWRITEPROTOCOL=https` tells Nextcloud the external connection is HTTPS
+- `TRUSTED_PROXIES=172.16.0.0/12` allows Nextcloud to trust Traefik's headers
+- Restart containers after configuration changes: `docker-compose restart nextcloud`
+
 ## Initial Configuration
 
 The official Nextcloud image handles all initial configuration automatically using environment variables:
