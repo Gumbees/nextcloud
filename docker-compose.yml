@@ -21,7 +21,6 @@ services:
     volumes:
       - "nextcloud_config_volume:/config"
       - "nextcloud_data_volume:/data"
-      - "media_volume:${CONTAINER_MEDIA_PATH}"
     networks:
       - nextcloud_apps
       - nextcloud_database_network
@@ -93,7 +92,6 @@ services:
     volumes:
       - "nextcloud_config_volume:/config"
       - "nextcloud_data_volume:/data"
-      - "media_volume:${CONTAINER_MEDIA_PATH}"
     networks:
       - nextcloud_apps
       - nextcloud_database_network
@@ -110,26 +108,6 @@ services:
         sleep 300
       done
       EOF'
-
-  cloudflared:
-    container_name: "${CONTAINER_NAME_PREFIX}_cloudflared"
-    image: "cloudflare/cloudflared:latest"
-    entrypoint: ["cloudflared", "--no-autoupdate"]
-    command: ["tunnel", "run"]
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARED_TOKEN}
-    networks:
-      - nextcloud_apps      # Access to app services
-      - container_internet  # Internet access for tunnel
-    restart: always
-    deploy:
-      replicas: ${ENABLE_CLOUDFLARED:-0}
-    healthcheck:
-      test: ["CMD", "cloudflared", "tunnel", "status"]
-      interval: 120s
-      timeout: 30s
-      retries: 5
-      start_period: 60s
 
 networks:
   # Internal isolated network for inter-service communication
