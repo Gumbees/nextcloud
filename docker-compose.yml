@@ -3,24 +3,36 @@
 # See README.md for detailed documentation
 #
 # This setup includes:
-# - Nextcloud web application
+# - Nextcloud web application (Official image with auto-configuration)
 # - MariaDB database
 # - Redis cache
-# - Cloudflared tunnel (optional)
 
 version: "3.8"
 
 services:
   nextcloud:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud"
-    image: "lscr.io/linuxserver/nextcloud:latest"
+    image: "nextcloud:latest"
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
       - TZ=${TZ}
+      # Database configuration
+      - MYSQL_DATABASE=${NEXTCLOUD_DB_NAME}
+      - MYSQL_USER=${NEXTCLOUD_DB_USER}
+      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - MYSQL_HOST=nextcloud_db:3306
+      # Admin user configuration
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      # Redis configuration
+      - REDIS_HOST=nextcloud_redis
+      - REDIS_HOST_PASSWORD=${NEXTCLOUD_REDIS_PASSWORD}
+      # Trusted domains
+      - NEXTCLOUD_TRUSTED_DOMAINS=${DOMAIN_NAME}
+      # Data directory
+      - NEXTCLOUD_DATA_DIR=/var/www/html/data
     volumes:
-      - "nextcloud_config_volume:/config"
-      - "nextcloud_data_volume:/data"
+      - "nextcloud_app_volume:/var/www/html"
+      - "nextcloud_data_volume:/var/www/html/data"
     networks:
       - nextcloud_apps
       - nextcloud_database_network
@@ -35,17 +47,16 @@ services:
       - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
       - "traefik.http.routers.nextcloud.tls=true"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
-      - "traefik.http.services.nextcloud.loadbalancer.server.port=443"
-      - "traefik.http.services.nextcloud.loadbalancer.server.scheme=https"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
       # Nextcloud specific headers
       - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Port=443"
-      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=nextcloud.${DOMAIN_NAME}"
+      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=${DOMAIN_NAME}"
       - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers"
 
   nextcloud_db:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
-    image: "mariadb:10.11"
+    image: "mariadb:10.5"
     environment:
       - MYSQL_ROOT_PASSWORD=${NEXTCLOUD_DB_ROOT_PASSWORD}
       - MYSQL_DATABASE=${NEXTCLOUD_DB_NAME}
@@ -81,33 +92,7 @@ services:
         max-file: '5'
         max-size: 10m
 
-  # Nextcloud cron job service
-  nextcloud_cron:
-    container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_cron"
-    image: "lscr.io/linuxserver/nextcloud:latest"
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-    volumes:
-      - "nextcloud_config_volume:/config"
-      - "nextcloud_data_volume:/data"
-    networks:
-      - nextcloud_apps
-      - nextcloud_database_network
-    depends_on:
-      - nextcloud_db
-      - nextcloud_redis
-    restart: unless-stopped
-    entrypoint: /bin/sh
-    command: |
-      -c 'sh -s <<EOF
-      trap "break;exit" SIGHUP SIGINT SIGTERM
-      while [ -f /config/www/nextcloud/occ ]; do
-        php /config/www/nextcloud/occ system:cron
-        sleep 300
-      done
-      EOF'
+
 
 networks:
   # Internal isolated network for inter-service communication
@@ -128,14 +113,14 @@ networks:
     name: "containers_internet"
 
 volumes:
-  # Nextcloud configuration volume
-  nextcloud_config_volume:
-    name: "${CONTAINER_NAME_PREFIX}_nextcloud_config"
+  # Nextcloud application volume (includes config, apps, etc.)
+  nextcloud_app_volume:
+    name: "${CONTAINER_NAME_PREFIX}_nextcloud_app"
     driver: local
     driver_opts:
       type: ${CONFIG_VOLUME_TYPE:-}
       o: ${CONFIG_VOLUME_OPTIONS:-}
-      device: ${CONFIG_BASE}/nextcloud/config
+      device: ${CONFIG_BASE}/nextcloud/app
 
   # Nextcloud data volume (user files)
   nextcloud_data_volume:

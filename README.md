@@ -2,21 +2,21 @@
 
 This Docker Compose configuration provides a complete Nextcloud setup with the following components:
 
-- **Nextcloud**: The main application (using LinuxServer.io image)
+- **Nextcloud**: The main application (using official Nextcloud image with auto-configuration)
 - **MariaDB**: Database backend
 - **Redis**: Memory cache for improved performance
-- **Cloudflared**: Optional tunnel for secure external access
 - **Traefik**: Reverse proxy with automatic SSL certificates
 
 ## Features
 
 - **ARM64 Compatible**: All images support ARM64 architecture
+- **Automatic Configuration**: Complete setup via environment variables
 - **Environment-based Configuration**: All settings managed via `.env` file
-- **Persistent Storage**: Separate volumes for config, data, and database
+- **Persistent Storage**: Separate volumes for app, data, and database
 - **Network Security**: Isolated networks for different components
 - **Automatic SSL**: Traefik integration with Let's Encrypt
-- **Cron Jobs**: Automated background tasks for Nextcloud
-- **Media Integration**: Optional media volume mounting
+- **Built-in Cron**: Official image includes automated background tasks
+- **Database Auto-Setup**: Automatic database configuration and admin user creation
 
 ## Quick Start
 
@@ -49,9 +49,12 @@ This Docker Compose configuration provides a complete Nextcloud setup with the f
 
 ### Core Settings
 - `CONTAINER_NAME_PREFIX`: Prefix for all container names
-- `PUID`/`PGID`: User/group IDs for file permissions
 - `TZ`: Timezone setting
 - `DOMAIN_NAME`: Your domain name for Traefik routing
+
+### Admin Configuration
+- `NEXTCLOUD_ADMIN_USER`: Nextcloud admin username
+- `NEXTCLOUD_ADMIN_PASSWORD`: Nextcloud admin password
 
 ### Storage Paths
 - `CONFIG_BASE`: Base path for configuration files
@@ -102,9 +105,10 @@ CONFIG_VOLUME_OPTIONS=addr=192.168.1.100,rw,nfsvers=4
 
 ### Backup
 Important directories to backup:
-- `${CONFIG_BASE}/nextcloud` - Nextcloud configuration
-- `${DATA_BASE}/nextcloud` - User data
-- `${CONFIG_BASE}/nextcloud-db` - Database files
+- `${CONFIG_BASE}/nextcloud/app` - Nextcloud application and configuration
+- `${DATA_BASE}/nextcloud/data` - User data files
+- `${CONFIG_BASE}/nextcloud/db` - Database files
+- `${CONFIG_BASE}/nextcloud/redis` - Redis cache data
 
 ### Updates
 ```bash
@@ -120,12 +124,6 @@ docker-compose logs -f nextcloud_db
 
 ## Troubleshooting
 
-### File Permissions
-Ensure PUID/PGID match your host user:
-```bash
-id $(whoami)
-```
-
 ### Database Connection
 Check database connectivity:
 ```bash
@@ -140,22 +138,22 @@ docker-compose exec nextcloud_redis redis-cli -a your_redis_password ping
 
 ## Initial Configuration
 
-After first startup, configure Nextcloud:
+The official Nextcloud image handles all initial configuration automatically using environment variables:
 
-1. **Database Settings:**
-   - Database type: MySQL/MariaDB
-   - Host: `nextcloud_db:3306`
-   - Database name: `nextcloud` (or your `NEXTCLOUD_DB_NAME`)
-   - Username: `nextcloud` (or your `NEXTCLOUD_DB_USER`)
-   - Password: Your `NEXTCLOUD_DB_PASSWORD`
+1. **Automatic Database Setup:**
+   - Database connection is configured automatically
+   - Database, tables, and users are created automatically
+   - Admin user is created with your specified credentials
 
-2. **Redis Cache:**
-   - Host: `nextcloud_redis`
-   - Port: `6379`
-   - Password: Your `NEXTCLOUD_REDIS_PASSWORD`
+2. **Automatic Redis Setup:**
+   - Redis cache is configured automatically for improved performance
+   - Session storage is handled by Redis
 
-3. **Trusted Domains:**
-   Add your domain to trusted domains in Nextcloud config.
+3. **Automatic Security Configuration:**
+   - Trusted domains are set automatically
+   - Reverse proxy headers are configured for Traefik
+
+**No manual web-based setup required!** Simply start the containers and access your Nextcloud instance.
 
 ## Performance Optimization
 
