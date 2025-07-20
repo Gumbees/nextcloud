@@ -1,11 +1,11 @@
-# This is the Nextcloud configuration file that creates local volumes for all containers.
+# This is the Nextcloud configuration file optimized for ARM architecture and 1TB file support
 # Environment variables are loaded from .env file by default
 # See README.md for detailed documentation
 #
 # This setup includes:
-# - Nextcloud web application (Official image with auto-configuration)
-# - PostgreSQL database
-# - Redis cache
+# - Nextcloud web application (ARM-optimized with large file support)
+# - PostgreSQL database (ARM-optimized)
+# - Redis cache (ARM-optimized with multithreading)
 
 version: "3.8"
 
@@ -13,6 +13,7 @@ services:
   nextcloud:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud"
     image: "nextcloud:latest"
+    platform: linux/arm64  # ARM optimization
     environment:
       - TZ=${TZ}
       # Database configuration
@@ -34,6 +35,21 @@ services:
       - OVERWRITEPROTOCOL=https
       - OVERWRITEHOST=${DOMAIN_NAME}
       - TRUSTED_PROXIES=172.16.0.0/12
+      # Large file support configuration via environment variables
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-2G}
+      - PHP_UPLOAD_LIMIT=${PHP_UPLOAD_LIMIT:-1024G}
+      - PHP_MAX_FILE_UPLOADS=${PHP_MAX_FILE_UPLOADS:-200}
+      - PHP_MAX_INPUT_VARS=${PHP_MAX_INPUT_VARS:-10000}
+      - PHP_MAX_EXECUTION_TIME=${PHP_MAX_EXECUTION_TIME:-3600}
+      - PHP_MAX_INPUT_TIME=${PHP_MAX_INPUT_TIME:-3600}
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE:-1024G}
+      - APACHE_BODY_LIMIT=${APACHE_BODY_LIMIT:-1073741824000}
+      # PHP OPcache optimization for ARM
+      - PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE:-1}
+      - PHP_OPCACHE_MEMORY_CONSUMPTION=${PHP_OPCACHE_MEMORY_CONSUMPTION:-256}
+      - PHP_OPCACHE_MAX_ACCELERATED_FILES=${PHP_OPCACHE_MAX_ACCELERATED_FILES:-10000}
+      - PHP_OPCACHE_REVALIDATE_FREQ=${PHP_OPCACHE_REVALIDATE_FREQ:-1}
+      - PHP_OPCACHE_SAVE_COMMENTS=${PHP_OPCACHE_SAVE_COMMENTS:-1}
     volumes:
       - "nextcloud_app_volume:/var/www/html"
       - "nextcloud_data_volume:/var/www/html/data"
@@ -45,6 +61,22 @@ services:
       - nextcloud_db
       - nextcloud_redis
     restart: unless-stopped
+    # ARM optimization: Resource limits and CPU affinity
+    deploy:
+      resources:
+        limits:
+          cpus: '${NEXTCLOUD_CPU_LIMIT:-4.0}'
+          memory: ${NEXTCLOUD_MEMORY_LIMIT:-4G}
+        reservations:
+          cpus: '${NEXTCLOUD_CPU_RESERVATION:-2.0}'
+          memory: ${NEXTCLOUD_MEMORY_RESERVATION:-2G}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 32768
+        hard: 32768
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.nextcloud.rule=Host(`${DOMAIN_NAME}`)"
@@ -52,25 +84,66 @@ services:
       - "traefik.http.routers.nextcloud.tls=true"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
       - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
-      # Nextcloud specific headers
+      # Large file support headers
       - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Port=443"
       - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=${DOMAIN_NAME}"
-      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers"
+      - "traefik.http.middlewares.nextcloud-buffering.buffering.maxRequestBodyBytes=1099511627776"  # 1TB
+      - "traefik.http.middlewares.nextcloud-buffering.buffering.retryExpression=IsNetworkError() && Attempts() <= 3"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers,nextcloud-buffering"
 
   nextcloud_db:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
     image: "postgres:16-alpine"
+    platform: linux/arm64  # ARM optimization
     environment:
       - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
       - POSTGRES_USER=${NEXTCLOUD_DB_USER}
       - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
       - TZ=${TZ}
+      # ARM-optimized PostgreSQL settings via environment
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=peer
     volumes:
       - "nextcloud_db_volume:/var/lib/postgresql/data"
     networks:
       - nextcloud_database_network
     restart: unless-stopped
+    # ARM optimization: Resource limits for database
+    deploy:
+      resources:
+        limits:
+          cpus: '${DB_CPU_LIMIT:-2.0}'
+          memory: ${DB_MEMORY_LIMIT:-2G}
+        reservations:
+          cpus: '${DB_CPU_RESERVATION:-1.0}'
+          memory: ${DB_MEMORY_RESERVATION:-1G}
+    command: >
+      postgres
+      -c max_connections=${DB_MAX_CONNECTIONS:-200}
+      -c shared_buffers=${DB_SHARED_BUFFERS:-512MB}
+      -c effective_cache_size=${DB_EFFECTIVE_CACHE_SIZE:-1536MB}
+      -c maintenance_work_mem=${DB_MAINTENANCE_WORK_MEM:-128MB}
+      -c checkpoint_completion_target=${DB_CHECKPOINT_COMPLETION_TARGET:-0.9}
+      -c wal_buffers=${DB_WAL_BUFFERS:-16MB}
+      -c default_statistics_target=${DB_DEFAULT_STATISTICS_TARGET:-100}
+      -c random_page_cost=${DB_RANDOM_PAGE_COST:-1.1}
+      -c effective_io_concurrency=${DB_EFFECTIVE_IO_CONCURRENCY:-200}
+      -c work_mem=${DB_WORK_MEM:-8MB}
+      -c min_wal_size=${DB_MIN_WAL_SIZE:-2GB}
+      -c max_wal_size=${DB_MAX_WAL_SIZE:-4GB}
+      -c max_worker_processes=${DB_MAX_WORKER_PROCESSES:-8}
+      -c max_parallel_workers_per_gather=${DB_MAX_PARALLEL_WORKERS_PER_GATHER:-4}
+      -c max_parallel_workers=${DB_MAX_PARALLEL_WORKERS:-8}
+      -c max_parallel_maintenance_workers=${DB_MAX_PARALLEL_MAINTENANCE_WORKERS:-4}
+      -c fsync=${DB_FSYNC:-on}
+      -c synchronous_commit=${DB_SYNCHRONOUS_COMMIT:-on}
+      -c full_page_writes=${DB_FULL_PAGE_WRITES:-on}
+      -c wal_compression=${DB_WAL_COMPRESSION:-on}
+      -c checkpoint_timeout=${DB_CHECKPOINT_TIMEOUT:-5min}
+      -c archive_mode=${DB_ARCHIVE_MODE:-off}
+      -c log_destination=${DB_LOG_DESTINATION:-stderr}
+      -c log_statement=${DB_LOG_STATEMENT:-none}
+      -c log_min_duration_statement=${DB_LOG_MIN_DURATION_STATEMENT:-1000}
     logging:
       driver: json-file
       options:
@@ -80,6 +153,7 @@ services:
   nextcloud_redis:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_redis"
     image: "redis:7-alpine"
+    platform: linux/arm64  # ARM optimization
     environment:
       - TZ=${TZ}
     volumes:
@@ -87,7 +161,36 @@ services:
     networks:
       - nextcloud_database_network
     restart: unless-stopped
-    command: redis-server --requirepass ${NEXTCLOUD_REDIS_PASSWORD}
+    # ARM optimization: Resource limits for Redis
+    deploy:
+      resources:
+        limits:
+          cpus: '${REDIS_CPU_LIMIT:-1.0}'
+          memory: ${REDIS_MEMORY_LIMIT:-1G}
+        reservations:
+          cpus: '${REDIS_CPU_RESERVATION:-0.5}'
+          memory: ${REDIS_MEMORY_RESERVATION:-512M}
+    command: >
+      redis-server
+      --requirepass ${NEXTCLOUD_REDIS_PASSWORD}
+      --maxmemory ${REDIS_MAXMEMORY:-768mb}
+      --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
+      --tcp-keepalive ${REDIS_TCP_KEEPALIVE:-60}
+      --tcp-backlog ${REDIS_TCP_BACKLOG:-511}
+      --timeout ${REDIS_TIMEOUT:-0}
+      --databases ${REDIS_DATABASES:-16}
+      --save ${REDIS_SAVE_900:-900} ${REDIS_SAVE_900_CHANGES:-1}
+      --save ${REDIS_SAVE_300:-300} ${REDIS_SAVE_300_CHANGES:-10}
+      --save ${REDIS_SAVE_60:-60} ${REDIS_SAVE_60_CHANGES:-10000}
+      --rdbcompression ${REDIS_RDB_COMPRESSION:-yes}
+      --rdbchecksum ${REDIS_RDB_CHECKSUM:-yes}
+      --stop-writes-on-bgsave-error ${REDIS_STOP_WRITES_ON_BGSAVE_ERROR:-yes}
+      --lazyfree-lazy-eviction ${REDIS_LAZYFREE_LAZY_EVICTION:-yes}
+      --lazyfree-lazy-expire ${REDIS_LAZYFREE_LAZY_EXPIRE:-yes}
+      --lazyfree-lazy-server-del ${REDIS_LAZYFREE_LAZY_SERVER_DEL:-yes}
+      --replica-lazy-flush ${REDIS_REPLICA_LAZY_FLUSH:-yes}
+      --io-threads ${REDIS_IO_THREADS:-4}
+      --io-threads-do-reads ${REDIS_IO_THREADS_DO_READS:-yes}
     logging:
       driver: json-file
       options:
@@ -102,12 +205,16 @@ networks:
     name: "${NEXTCLOUD_NETWORK}"
     internal: true
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
 
   # Database network for database communication
   nextcloud_database_network:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_db_network"
     internal: true
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
 
   # External network for internet access
   container_internet:
@@ -120,17 +227,17 @@ volumes:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_app"
     driver: local
     driver_opts:
-      type: ${CONFIG_VOLUME_TYPE:-}
-      o: ${CONFIG_VOLUME_OPTIONS:-}
+      type: ${CONFIG_VOLUME_TYPE:-none}
+      o: ${CONFIG_VOLUME_OPTIONS:-bind,rw,noatime}
       device: ${CONFIG_BASE}/nextcloud/app
 
-  # Nextcloud data volume (user files)
+  # Nextcloud data volume (user files) - optimized for large files
   nextcloud_data_volume:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_data"
     driver: local
     driver_opts:
-      type: ${DATA_VOLUME_TYPE:-}
-      o: ${DATA_VOLUME_OPTIONS:-}
+      type: ${DATA_VOLUME_TYPE:-none}
+      o: ${DATA_VOLUME_OPTIONS:-bind,rw,noatime,async}
       device: ${DATA_BASE}/nextcloud
 
   # PostgreSQL database volume
@@ -138,8 +245,8 @@ volumes:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
     driver: local
     driver_opts:
-      type: ${CONFIG_VOLUME_TYPE:-}
-      o: ${CONFIG_VOLUME_OPTIONS:-}
+      type: ${CONFIG_VOLUME_TYPE:-none}
+      o: ${CONFIG_VOLUME_OPTIONS:-bind,rw,noatime}
       device: ${CONFIG_BASE}/nextcloud/db
 
   # Redis cache volume
@@ -147,6 +254,6 @@ volumes:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_redis"
     driver: local
     driver_opts:
-      type: ${CONFIG_VOLUME_TYPE:-}
-      o: ${CONFIG_VOLUME_OPTIONS:-}
+      type: ${CONFIG_VOLUME_TYPE:-none}
+      o: ${CONFIG_VOLUME_OPTIONS:-bind,rw,noatime}
       device: ${CONFIG_BASE}/nextcloud/redis
