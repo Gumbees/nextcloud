@@ -4,7 +4,7 @@
 #
 # This setup includes:
 # - Nextcloud web application (Official image with auto-configuration)
-# - MariaDB database
+# - PostgreSQL database
 # - Redis cache
 
 version: "3.8"
@@ -16,10 +16,10 @@ services:
     environment:
       - TZ=${TZ}
       # Database configuration
-      - MYSQL_DATABASE=${NEXTCLOUD_DB_NAME}
-      - MYSQL_USER=${NEXTCLOUD_DB_USER}
-      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
-      - MYSQL_HOST=nextcloud_db:3306
+      - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
+      - POSTGRES_USER=${NEXTCLOUD_DB_USER}
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_HOST=nextcloud_db:5432
       # Admin user configuration
       - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
       - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
@@ -56,19 +56,17 @@ services:
 
   nextcloud_db:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
-    image: "mariadb:10.5"
+    image: "postgres:16-alpine"
     environment:
-      - MYSQL_ROOT_PASSWORD=${NEXTCLOUD_DB_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${NEXTCLOUD_DB_NAME}
-      - MYSQL_USER=${NEXTCLOUD_DB_USER}
-      - MYSQL_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
+      - POSTGRES_USER=${NEXTCLOUD_DB_USER}
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
       - TZ=${TZ}
     volumes:
-      - "nextcloud_db_volume:/var/lib/mysql"
+      - "nextcloud_db_volume:/var/lib/postgresql/data"
     networks:
       - nextcloud_database_network
     restart: unless-stopped
-    command: --innodb-buffer-pool-size=256M --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     logging:
       driver: json-file
       options:
@@ -131,7 +129,7 @@ volumes:
       o: ${DATA_VOLUME_OPTIONS:-}
       device: ${DATA_BASE}/nextcloud
 
-  # MariaDB database volume
+  # PostgreSQL database volume
   nextcloud_db_volume:
     name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
     driver: local

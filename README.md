@@ -3,7 +3,7 @@
 This Docker Compose configuration provides a complete Nextcloud setup with the following components:
 
 - **Nextcloud**: The main application (using official Nextcloud image with auto-configuration)
-- **MariaDB**: Database backend
+- **PostgreSQL**: Database backend
 - **Redis**: Memory cache for improved performance
 - **Traefik**: Reverse proxy with automatic SSL certificates
 
@@ -62,7 +62,6 @@ This Docker Compose configuration provides a complete Nextcloud setup with the f
 - `MEDIA_BASE`: Base path for media files (optional)
 
 ### Database Configuration
-- `NEXTCLOUD_DB_ROOT_PASSWORD`: MariaDB root password
 - `NEXTCLOUD_DB_NAME`: Database name for Nextcloud
 - `NEXTCLOUD_DB_USER`: Database username
 - `NEXTCLOUD_DB_PASSWORD`: Database password
@@ -107,7 +106,7 @@ CONFIG_VOLUME_OPTIONS=addr=192.168.1.100,rw,nfsvers=4
 Important directories to backup:
 - `${CONFIG_BASE}/nextcloud/app` - Nextcloud application and configuration
 - `${DATA_BASE}/nextcloud/data` - User data files
-- `${CONFIG_BASE}/nextcloud/db` - Database files
+- `${CONFIG_BASE}/nextcloud/db` - PostgreSQL database files
 - `${CONFIG_BASE}/nextcloud/redis` - Redis cache data
 
 ### Updates
@@ -127,7 +126,7 @@ docker-compose logs -f nextcloud_db
 ### Database Connection
 Check database connectivity:
 ```bash
-docker-compose exec nextcloud_db mysql -u nextcloud -p
+docker-compose exec nextcloud_db psql -U nextcloud -d nextcloud
 ```
 
 ### Redis Connection
@@ -158,10 +157,11 @@ The official Nextcloud image handles all initial configuration automatically usi
 ## Performance Optimization
 
 For better performance, consider:
-- Increasing MariaDB buffer pool size
+- Tuning PostgreSQL configuration (shared_buffers, effective_cache_size)
 - Configuring Redis as session handler
 - Using SSD storage for database and cache
 - Monitoring resource usage
+- Enabling PostgreSQL connection pooling if needed
 
 ## Support
 
