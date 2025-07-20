@@ -50,6 +50,24 @@ services:
       - PHP_OPCACHE_MAX_ACCELERATED_FILES=${PHP_OPCACHE_MAX_ACCELERATED_FILES:-10000}
       - PHP_OPCACHE_REVALIDATE_FREQ=${PHP_OPCACHE_REVALIDATE_FREQ:-1}
       - PHP_OPCACHE_SAVE_COMMENTS=${PHP_OPCACHE_SAVE_COMMENTS:-1}
+      # PHP-FPM optimization for ARM multithreading and concurrent requests
+      - PHP_FPM_PM=${PHP_FPM_PM:-dynamic}
+      - PHP_FPM_PM_MAX_CHILDREN=${PHP_FPM_PM_MAX_CHILDREN:-40}
+      - PHP_FPM_PM_START_SERVERS=${PHP_FPM_PM_START_SERVERS:-8}
+      - PHP_FPM_PM_MIN_SPARE_SERVERS=${PHP_FPM_PM_MIN_SPARE_SERVERS:-4}
+      - PHP_FPM_PM_MAX_SPARE_SERVERS=${PHP_FPM_PM_MAX_SPARE_SERVERS:-12}
+      - PHP_FPM_PM_MAX_REQUESTS=${PHP_FPM_PM_MAX_REQUESTS:-1000}
+      - PHP_FPM_REQUEST_TERMINATE_TIMEOUT=${PHP_FPM_REQUEST_TERMINATE_TIMEOUT:-3600}
+      - PHP_FPM_PROCESS_IDLE_TIMEOUT=${PHP_FPM_PROCESS_IDLE_TIMEOUT:-30s}
+      # Apache optimization for ARM concurrent connections
+      - APACHE_SERVER_LIMIT=${APACHE_SERVER_LIMIT:-16}
+      - APACHE_MAX_REQUEST_WORKERS=${APACHE_MAX_REQUEST_WORKERS:-400}
+      - APACHE_THREAD_LIMIT=${APACHE_THREAD_LIMIT:-25}
+      - APACHE_THREADS_PER_CHILD=${APACHE_THREADS_PER_CHILD:-25}
+      - APACHE_MIN_SPARE_THREADS=${APACHE_MIN_SPARE_THREADS:-25}
+      - APACHE_MAX_SPARE_THREADS=${APACHE_MAX_SPARE_THREADS:-75}
+      - APACHE_KEEPALIVE_TIMEOUT=${APACHE_KEEPALIVE_TIMEOUT:-5}
+      - APACHE_MAX_KEEPALIVE_REQUESTS=${APACHE_MAX_KEEPALIVE_REQUESTS:-100}
     volumes:
       - "nextcloud_app_volume:/var/www/html"
       - "nextcloud_data_volume:/var/www/html/data"
@@ -119,7 +137,7 @@ services:
           memory: ${DB_MEMORY_RESERVATION:-1G}
     command: >
       postgres
-      -c max_connections=${DB_MAX_CONNECTIONS:-200}
+      -c max_connections=${DB_MAX_CONNECTIONS:-300}
       -c shared_buffers=${DB_SHARED_BUFFERS:-512MB}
       -c effective_cache_size=${DB_EFFECTIVE_CACHE_SIZE:-1536MB}
       -c maintenance_work_mem=${DB_MAINTENANCE_WORK_MEM:-128MB}
@@ -144,6 +162,12 @@ services:
       -c log_destination=${DB_LOG_DESTINATION:-stderr}
       -c log_statement=${DB_LOG_STATEMENT:-none}
       -c log_min_duration_statement=${DB_LOG_MIN_DURATION_STATEMENT:-1000}
+      -c idle_in_transaction_session_timeout=${DB_IDLE_IN_TRANSACTION_TIMEOUT:-300000}
+      -c lock_timeout=${DB_LOCK_TIMEOUT:-30000}
+      -c statement_timeout=${DB_STATEMENT_TIMEOUT:-300000}
+      -c tcp_keepalives_idle=${DB_TCP_KEEPALIVES_IDLE:-600}
+      -c tcp_keepalives_interval=${DB_TCP_KEEPALIVES_INTERVAL:-30}
+      -c tcp_keepalives_count=${DB_TCP_KEEPALIVES_COUNT:-3}
     logging:
       driver: json-file
       options:
@@ -176,8 +200,9 @@ services:
       --maxmemory ${REDIS_MAXMEMORY:-768mb}
       --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
       --tcp-keepalive ${REDIS_TCP_KEEPALIVE:-60}
-      --tcp-backlog ${REDIS_TCP_BACKLOG:-511}
+      --tcp-backlog ${REDIS_TCP_BACKLOG:-1024}
       --timeout ${REDIS_TIMEOUT:-0}
+      --maxclients ${REDIS_MAX_CLIENTS:-1000}
       --databases ${REDIS_DATABASES:-16}
       --save ${REDIS_SAVE_900:-900} ${REDIS_SAVE_900_CHANGES:-1}
       --save ${REDIS_SAVE_300:-300} ${REDIS_SAVE_300_CHANGES:-10}

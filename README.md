@@ -26,6 +26,8 @@ This Docker Compose configuration provides a complete Nextcloud setup optimized 
 ### Nextcloud Application
 - ARM64 platform specification
 - PHP OPcache tuned for ARM processors
+- **PHP-FPM process management** optimized for concurrent requests
+- **Apache MPM configuration** for ARM multithreading
 - Large file handling with 1TB upload limits
 - Resource limits and reservations
 - Optimized file descriptor limits
@@ -34,6 +36,8 @@ This Docker Compose configuration provides a complete Nextcloud setup optimized 
 - ARM-specific parallel worker configuration
 - WAL compression and optimized checkpoint settings
 - Tuned shared buffers and cache sizes
+- **Increased connection limits** for concurrent PHP processes
+- **Connection timeout optimization** to prevent hangs
 - Parallel maintenance operations
 - I/O concurrency optimization
 
@@ -90,6 +94,19 @@ This Docker Compose configuration provides a complete Nextcloud setup optimized 
 - `PHP_OPCACHE_MEMORY_CONSUMPTION`: OPcache memory (default: 256MB)
 - `PHP_OPCACHE_MAX_ACCELERATED_FILES`: Cached file limit (default: 10000)
 - `PHP_OPCACHE_REVALIDATE_FREQ`: Cache revalidation frequency
+
+### PHP-FPM Concurrency Management
+- `PHP_FPM_PM_MAX_CHILDREN`: Maximum child processes (default: 40)
+- `PHP_FPM_PM_START_SERVERS`: Starting child processes (default: 8)
+- `PHP_FPM_PM_MIN_SPARE_SERVERS`: Minimum idle processes (default: 4)
+- `PHP_FPM_PM_MAX_SPARE_SERVERS`: Maximum idle processes (default: 12)
+- `PHP_FPM_PM_MAX_REQUESTS`: Requests before restart (default: 1000)
+- `PHP_FPM_REQUEST_TERMINATE_TIMEOUT`: Max request time (default: 3600s)
+
+### Apache Concurrent Connection Handling
+- `APACHE_MAX_REQUEST_WORKERS`: Max simultaneous requests (default: 400)
+- `APACHE_THREADS_PER_CHILD`: Threads per process (default: 25)
+- `APACHE_SERVER_LIMIT`: Maximum server processes (default: 16)
 
 ### PostgreSQL ARM Tuning
 - `DB_MAX_WORKER_PROCESSES`: Background worker processes (default: 8)
@@ -252,6 +269,25 @@ docker-compose logs -f nextcloud_redis
 ```
 
 ## Troubleshooting
+
+### PHP Timeout Issues with Concurrent Requests
+```bash
+# Check PHP-FPM process status
+docker-compose exec nextcloud ps aux | grep php-fpm
+
+# Monitor PHP-FPM pool status
+docker-compose exec nextcloud cat /proc/*/stat | grep php-fpm
+
+# Check current PHP-FPM configuration
+docker-compose exec nextcloud php-fpm -tt
+
+# Monitor Apache worker processes
+docker-compose exec nextcloud apache2ctl status
+
+# Check for memory issues
+docker-compose exec nextcloud free -h
+docker stats nextcloud_nextcloud
+```
 
 ### Large File Upload Issues
 ```bash
