@@ -151,6 +151,7 @@ The official Nextcloud image handles all initial configuration automatically usi
 3. **Automatic Security Configuration:**
    - Trusted domains are set automatically
    - Reverse proxy headers are configured for Traefik
+   - HTTPS protocol detection is properly configured
 
 **No manual web-based setup required!** Simply start the containers and access your Nextcloud instance.
 

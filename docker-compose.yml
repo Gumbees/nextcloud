@@ -30,6 +30,10 @@ services:
       - NEXTCLOUD_TRUSTED_DOMAINS=${DOMAIN_NAME}
       # Data directory
       - NEXTCLOUD_DATA_DIR=/var/www/html/data
+      # Reverse proxy configuration
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=${DOMAIN_NAME}
+      - TRUSTED_PROXIES=172.16.0.0/12
     volumes:
       - "nextcloud_app_volume:/var/www/html"
       - "nextcloud_data_volume:/var/www/html/data"
