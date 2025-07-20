@@ -144,7 +144,7 @@ volumes:
     driver_opts:
       type: ${DATA_VOLUME_TYPE:-}
       o: ${DATA_VOLUME_OPTIONS:-}
-      device: ${DATA_BASE}/nextcloud/user_data
+      device: ${DATA_BASE}/nextcloud
 
   # MariaDB database volume
   nextcloud_db_volume:
