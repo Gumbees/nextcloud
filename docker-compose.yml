@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.nextcloud.rule=Host(`${DOMAIN_NAME}`)"
       - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
       - "traefik.http.routers.nextcloud.tls=true"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
