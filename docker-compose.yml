@@ -75,6 +75,7 @@ services:
       - nextcloud_apps
       - nextcloud_database_network
       - container_internet
+      - proxy
     depends_on:
       - nextcloud_db
       - nextcloud_redis
@@ -245,6 +246,11 @@ networks:
   container_internet:
     external: true
     name: "containers_internet"
+
+  # External network for proxy communication
+  proxy:
+    external: true
+    name: "proxy"
 
 volumes:
   # Nextcloud application volume (includes config, apps, etc.)
