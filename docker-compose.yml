@@ -72,16 +72,35 @@ services:
       - "nextcloud_app_volume:/var/www/html"
       - "nextcloud_data_volume:/var/www/html/data"
     networks:
-      - nextcloud_apps
-      - nextcloud_database_network
-      - container_internet
-      - proxy
+      - nextcloud_stack
+      - traefik_public
     depends_on:
       - nextcloud_db
       - nextcloud_redis
-    restart: unless-stopped
-    # ARM optimization: Resource limits and CPU affinity
+    # Swarm mode deployment configuration
     deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 60s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 60s
+        order: stop-first
       resources:
         limits:
           cpus: '${NEXTCLOUD_CPU_LIMIT:-4.0}'
@@ -89,6 +108,21 @@ services:
         reservations:
           cpus: '${NEXTCLOUD_CPU_RESERVATION:-2.0}'
           memory: ${NEXTCLOUD_MEMORY_RESERVATION:-2G}
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik_public"
+        - "traefik.http.routers.nextcloud.rule=Host(\`${DOMAIN_NAME}\`)"
+        - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
+        - "traefik.http.routers.nextcloud.tls=true"
+        - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+        - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+        # Large file support headers
+        - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+        - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Port=443"
+        - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=${DOMAIN_NAME}"
+        - "traefik.http.middlewares.nextcloud-buffering.buffering.maxRequestBodyBytes=1099511627776"  # 1TB
+        - "traefik.http.middlewares.nextcloud-buffering.buffering.retryExpression=IsNetworkError() && Attempts() <= 3"
+        - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers,nextcloud-buffering"
     ulimits:
       nofile:
         soft: 65536
@@ -96,20 +130,7 @@ services:
       nproc:
         soft: 32768
         hard: 32768
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nextcloud.rule=Host(`${DOMAIN_NAME}`)"
-      - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
-      - "traefik.http.routers.nextcloud.tls=true"
-      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
-      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
-      # Large file support headers
-      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
-      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Port=443"
-      - "traefik.http.middlewares.nextcloud-headers.headers.customrequestheaders.X-Forwarded-Host=${DOMAIN_NAME}"
-      - "traefik.http.middlewares.nextcloud-buffering.buffering.maxRequestBodyBytes=1099511627776"  # 1TB
-      - "traefik.http.middlewares.nextcloud-buffering.buffering.retryExpression=IsNetworkError() && Attempts() <= 3"
-      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers,nextcloud-buffering"
+
 
   nextcloud_db:
     container_name: "${CONTAINER_NAME_PREFIX}_nextcloud_db"
@@ -125,10 +146,31 @@ services:
     volumes:
       - "nextcloud_db_volume:/var/lib/postgresql/data"
     networks:
-      - nextcloud_database_network
-    restart: unless-stopped
-    # ARM optimization: Resource limits for database
+      - nextcloud_stack
+    # Swarm mode deployment configuration for database
     deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 60s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 60s
+        order: stop-first
       resources:
         limits:
           cpus: '${DB_CPU_LIMIT:-2.0}'
@@ -184,10 +226,31 @@ services:
     volumes:
       - "nextcloud_redis_volume:/data"
     networks:
-      - nextcloud_database_network
-    restart: unless-stopped
-    # ARM optimization: Resource limits for Redis
+      - nextcloud_stack
+    # Swarm mode deployment configuration for Redis
     deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 60s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 60s
+        order: stop-first
       resources:
         limits:
           cpus: '${REDIS_CPU_LIMIT:-1.0}'
@@ -226,31 +289,18 @@ services:
 
 
 networks:
-  # Internal isolated network for inter-service communication
-  nextcloud_apps:
-    name: "${NEXTCLOUD_NETWORK}"
-    internal: true
-    driver: bridge
+  # Internal overlay network for stack communication
+  nextcloud_stack:
+    driver: overlay
     driver_opts:
       com.docker.network.driver.mtu: 1500
+    internal: false
+    attachable: true
 
-  # Database network for database communication
-  nextcloud_database_network:
-    name: "${CONTAINER_NAME_PREFIX}_nextcloud_db_network"
-    internal: true
-    driver: bridge
-    driver_opts:
-      com.docker.network.driver.mtu: 1500
-
-  # External network for internet access
-  container_internet:
+  # External Traefik public network for proxy communication
+  traefik_public:
     external: true
-    name: "containers_internet"
-
-  # External network for proxy communication
-  proxy:
-    external: true
-    name: "proxy"
+    name: "traefik_public"
 
 volumes:
   # Nextcloud application volume (includes config, apps, etc.)
