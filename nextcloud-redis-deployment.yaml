@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose -f docker-compose.yml convert
+    kompose.version: 1.36.0 (HEAD)
+  labels:
+    io.kompose.service: nextcloud-redis
+  name: nextcloud-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: nextcloud-redis
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose -f docker-compose.yml convert
+        kompose.version: 1.36.0 (HEAD)
+      labels:
+        io.kompose.service: nextcloud-redis
+    spec:
+      containers:
+        - args:
+            - redis-server
+            - --requirepass
+            - --maxmemory
+            - 768mb
+            - --maxmemory-policy
+            - allkeys-lru
+            - --tcp-keepalive
+            - "60"
+            - --tcp-backlog
+            - "1024"
+            - --timeout
+            - "0"
+            - --maxclients
+            - "1000"
+            - --databases
+            - "16"
+            - --save
+            - "900"
+            - "1"
+            - --save
+            - "300"
+            - "10"
+            - --save
+            - "60"
+            - "10000"
+            - --rdbcompression
+            - "yes"
+            - --rdbchecksum
+            - "yes"
+            - --stop-writes-on-bgsave-error
+            - "yes"
+            - --lazyfree-lazy-eviction
+            - "yes"
+            - --lazyfree-lazy-expire
+            - "yes"
+            - --lazyfree-lazy-server-del
+            - "yes"
+            - --replica-lazy-flush
+            - "yes"
+            - --io-threads
+            - "4"
+            - --io-threads-do-reads
+            - "yes"
+          env:
+            - name: TZ
+          image: redis:7-alpine
+          name: -nextcloud-redis
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1073741824"
+            requests:
+              cpu: 500m
+              memory: "536870912"
+          volumeMounts:
+            - mountPath: /data
+              name: nextcloud-redis-volume
+      restartPolicy: Always
+      volumes:
+        - name: nextcloud-redis-volume
+          persistentVolumeClaim:
+            claimName: nextcloud-redis-volume

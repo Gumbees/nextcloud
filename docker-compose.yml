@@ -76,10 +76,7 @@ services:
     # Swarm mode deployment configuration
     deploy:
       mode: replicated
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
+      replicas: ${NEXTCLOUD_REPLICAS:-2}
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -139,9 +136,6 @@ services:
     deploy:
       mode: replicated
       replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -217,9 +211,6 @@ services:
     deploy:
       mode: replicated
       replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 5s
