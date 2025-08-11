@@ -103,7 +103,7 @@ services:
           memory: ${NEXTCLOUD_MEMORY_RESERVATION:-2G}
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=traefik_public"
+        - "traefik.swarm.network=traefik_public"
         - "traefik.http.routers.nextcloud.rule=Host(`${DOMAIN_NAME}`)"
         - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
         - "traefik.http.routers.nextcloud.tls=true"
